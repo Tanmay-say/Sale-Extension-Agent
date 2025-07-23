@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chatbot Agent</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Authentication Section -->
+        <div class="auth-section" id="authSection">
+            <div class="auth-card">
+                <h3>Welcome to AI Chatbot</h3>
+                <p>Enter your OpenAI API key to start chatting</p>
+                <form id="authForm" class="auth-form">
+                    <div class="input-group">
+                        <label for="apiKey">OpenAI API Key</label>
+                        <input type="password" id="apiKey" placeholder="sk-..." required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <span>Connect</span>
+                        <div class="loader" style="display: none;"></div>
+                    </button>
+                </form>
+                <a href="options.html" target="_blank" class="link">Need help getting an API key?</a>
+            </div>
+        </div>
+
+        <!-- Main Interface -->
+        <div class="main-interface" id="mainInterface" style="display: none;">
+            <!-- Header with Scan Button -->
+            <header class="header">
+                <div class="header-content">
+                    <div class="logo">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                            <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                            <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                        </svg>
+                        <span>AI Chatbot</span>
+                    </div>
+                    <button class="btn btn-scan" id="scanBtn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M1 12S5 4 12 4S23 12 23 12S19 20 12 20S1 12 1 12Z" stroke="currentColor" stroke-width="2"/>
+                            <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        <span>Scan</span>
+                        <div class="loader" style="display: none;"></div>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Chat Area -->
+            <div class="chat-container">
+                <div class="chat-messages" id="chatMessages">
+                    <div class="chat-message ai-message">
+                        <div class="message-avatar">🤖</div>
+                        <div class="message-content">
+                            <p>Hi! I'm your AI assistant. Click "Scan" above to analyze the current webpage, then ask me anything about it!</p>
+                            <div class="suggestions">
+                                <button class="suggestion-btn" data-query="What's on this page?" disabled>📄 What's on this page?</button>
+                                <button class="suggestion-btn" data-query="Analyze the products here" disabled>🔍 Analyze products</button>
+                                <button class="suggestion-btn" data-query="Help me understand this page" disabled>💡 Help me understand</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="chat-input-container">
+                    <div class="chat-input-wrapper">
+                        <input type="text" id="chatInput" placeholder="Scan the page first, then ask me anything..." disabled>
+                        <button id="sendChatBtn" class="btn btn-send" disabled>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <line x1="22" y1="2" x2="11" y2="13" stroke="currentColor" stroke-width="2"/>
+                                <polygon points="22,2 15,22 11,13 2,9 22,2" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status Bar -->
+            <div class="status-bar">
+                <div class="status-indicator">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span id="statusText">Ready</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html> 

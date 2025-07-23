@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "AI Chatbot Agent",
+  "version": "1.0.0",
+  "description": "A clean, minimalistic AI chatbot that scans web pages and provides intelligent assistance through natural conversation.",
+  
+  "permissions": [
+    "activeTab",
+    "storage",
+    "tabs",
+    "scripting",
+    "background",
+    "unlimitedStorage"
+  ],
+  
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "AI Chatbot Agent"
+  },
+  
+  "options_page": "options.html"
+} 
