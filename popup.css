@@ -8,7 +8,7 @@
 
 body {
     width: 380px;
-    height: 550px;
+    height: 750px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     background: #f8fafc;
     color: #1a202c;
@@ -145,6 +145,54 @@ body {
     color: #ffffff;
 }
 
+.header-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-refresh {
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    padding: 0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
+}
+
+.btn-refresh svg {
+    transition: transform 0.3s ease;
+}
+
+.btn-refresh:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.btn-refresh:hover:not(:disabled) svg {
+    transform: rotate(180deg);
+}
+
+.btn-refresh:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.btn-refresh.loading svg {
+    display: none;
+}
+
+/* Update existing btn-scan styles */
 .btn-scan {
     background: rgba(255, 255, 255, 0.15);
     color: white;
@@ -159,6 +207,7 @@ body {
     align-items: center;
     gap: 6px;
     backdrop-filter: blur(10px);
+    height: 36px;
 }
 
 .btn-scan:hover:not(:disabled) {
@@ -192,6 +241,7 @@ body {
     flex-direction: column;
     gap: 16px;
     background: #fafbfc;
+    min-height: 400px;
 }
 
 .chat-message {
@@ -513,9 +563,9 @@ input:focus {
 }
 
 /* Responsive adjustments */
-@media (max-height: 550px) {
+@media (max-height: 650px) {
     body {
-        height: 450px;
+        height: 550px;
     }
     
     .auth-section {
@@ -528,5 +578,6 @@ input:focus {
     
     .chat-messages {
         padding: 16px;
+        min-height: 300px;
     }
 } 

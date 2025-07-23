@@ -29,7 +29,7 @@
 
         <!-- Main Interface -->
         <div class="main-interface" id="mainInterface" style="display: none;">
-            <!-- Header with Scan Button -->
+            <!-- Header with Buttons -->
             <header class="header">
                 <div class="header-content">
                     <div class="logo">
@@ -40,14 +40,22 @@
                         </svg>
                         <span>AI Chatbot</span>
                     </div>
-                    <button class="btn btn-scan" id="scanBtn">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M1 12S5 4 12 4S23 12 23 12S19 20 12 20S1 12 1 12Z" stroke="currentColor" stroke-width="2"/>
-                            <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
-                        </svg>
-                        <span>Scan</span>
-                        <div class="loader" style="display: none;"></div>
-                    </button>
+                    <div class="header-buttons">
+                        <button class="btn btn-refresh" id="refreshBtn" title="Start Fresh Chat">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3M12 3L16 7M12 3L8 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <div class="loader" style="display: none;"></div>
+                        </button>
+                        <button class="btn btn-scan" id="scanBtn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M1 12S5 4 12 4S23 12 23 12S19 20 12 20S1 12 1 12Z" stroke="currentColor" stroke-width="2"/>
+                                <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <span>Scan</span>
+                            <div class="loader" style="display: none;"></div>
+                        </button>
+                    </div>
                 </div>
             </header>
 

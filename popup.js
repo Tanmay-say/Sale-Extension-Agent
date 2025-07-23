@@ -6,12 +6,16 @@ class PopupController {
     this.isAuthenticated = false;
     this.pageData = null;
     this.chatHistory = [];
+    this.sessionKey = null;
     this.init();
   }
 
   async init() {
     // Get current tab
     await this.getCurrentTab();
+    
+    // Generate session key for this popup instance
+    this.sessionKey = `popup_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     // Check authentication status
     await this.checkAuthStatus();
@@ -24,6 +28,9 @@ class PopupController {
     
     // Load session data
     await this.loadSessionData();
+    
+    // Save session periodically
+    this.startSessionSaver();
   }
 
   async getCurrentTab() {
@@ -39,12 +46,90 @@ class PopupController {
 
   async checkAuthStatus() {
     try {
-      const result = await chrome.storage.local.get(['userCredentials']);
+      const result = await chrome.storage.local.get(['userCredentials', 'chatbotSession']);
       this.isAuthenticated = !!result.userCredentials;
+      
+      // Restore session if available
+      if (result.chatbotSession) {
+        this.restoreSession(result.chatbotSession);
+      }
+      
       this.updateUI();
     } catch (error) {
       console.error('Failed to check auth status:', error);
     }
+  }
+
+  restoreSession(session) {
+    try {
+      if (session.pageData) {
+        this.pageData = session.pageData;
+      }
+      if (session.chatHistory && Array.isArray(session.chatHistory)) {
+        this.chatHistory = session.chatHistory;
+        this.restoreChatMessages();
+      }
+      console.log('Session restored successfully');
+    } catch (error) {
+      console.error('Error restoring session:', error);
+    }
+  }
+
+  restoreChatMessages() {
+    try {
+      const chatMessages = document.getElementById('chatMessages');
+      if (!chatMessages) return;
+
+      // Clear existing messages except the initial AI greeting
+      const initialMessage = chatMessages.querySelector('.ai-message');
+      chatMessages.innerHTML = '';
+      if (initialMessage) {
+        chatMessages.appendChild(initialMessage);
+      }
+
+      // Restore chat history
+      this.chatHistory.forEach(message => {
+        if (message.sender && message.content) {
+          this.addChatMessage(message.sender, message.content, false); // false = don't save to history again
+        }
+      });
+    } catch (error) {
+      console.error('Error restoring chat messages:', error);
+    }
+  }
+
+  async saveSession() {
+    try {
+      const sessionData = {
+        timestamp: Date.now(),
+        pageData: this.pageData,
+        chatHistory: this.chatHistory,
+        currentTabUrl: this.currentTab?.url,
+        sessionKey: this.sessionKey
+      };
+
+      await chrome.storage.local.set({
+        chatbotSession: sessionData
+      });
+
+      console.log('Session saved successfully');
+    } catch (error) {
+      console.error('Error saving session:', error);
+    }
+  }
+
+  startSessionSaver() {
+    // Save session every 10 seconds
+    setInterval(() => {
+      if (this.isAuthenticated) {
+        this.saveSession();
+      }
+    }, 10000);
+
+    // Save session when popup is about to close
+    window.addEventListener('beforeunload', () => {
+      this.saveSession();
+    });
   }
 
   updateUI() {
@@ -88,6 +173,10 @@ class PopupController {
     const authForm = document.getElementById('authForm');
     authForm.addEventListener('submit', (e) => this.handleAuthentication(e));
 
+    // Refresh button
+    const refreshBtn = document.getElementById('refreshBtn');
+    refreshBtn.addEventListener('click', () => this.refreshChat());
+
     // Scan button
     const scanBtn = document.getElementById('scanBtn');
     scanBtn.addEventListener('click', () => this.scanCurrentPage());
@@ -113,6 +202,57 @@ class PopupController {
         this.sendChatMessage(query);
       });
     });
+  }
+
+  async refreshChat() {
+    try {
+      const refreshBtn = document.getElementById('refreshBtn');
+      this.setButtonLoading(refreshBtn, true);
+
+      // Clear chat history except the initial greeting
+      const chatMessages = document.getElementById('chatMessages');
+      const initialMessage = chatMessages.querySelector('.ai-message');
+      chatMessages.innerHTML = '';
+      if (initialMessage) {
+        chatMessages.appendChild(initialMessage.cloneNode(true));
+      }
+
+      // Reset chat history
+      this.chatHistory = [];
+
+      // Clear page data if it exists
+      if (this.pageData) {
+        this.pageData = null;
+        // Disable chat interface until new scan
+        this.enableChatInterface();
+      }
+
+      // Update status
+      this.updateStatus('Chat refreshed', 'success');
+
+      // Save the cleared session
+      await this.saveSession();
+
+      // Re-attach event listeners to new suggestion buttons
+      const suggestionBtns = document.querySelectorAll('.suggestion-btn');
+      suggestionBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const query = btn.dataset.query;
+          this.sendChatMessage(query);
+        });
+        btn.disabled = true;
+      });
+
+      // Show success message
+      this.addChatMessage('ai', 'Chat session refreshed! Click "Scan" to analyze the current webpage and start a new conversation.');
+
+    } catch (error) {
+      console.error('Error refreshing chat:', error);
+      this.showError('Failed to refresh chat. Please try again.');
+    } finally {
+      const refreshBtn = document.getElementById('refreshBtn');
+      this.setButtonLoading(refreshBtn, false);
+    }
   }
 
   setupMessageListener() {
@@ -157,19 +297,22 @@ class PopupController {
         credentials: { apiKey }
       });
 
-      if (response.success) {
+      if (response && response.success) {
         this.isAuthenticated = true;
         this.updateUI();
         this.updateStatus('Connected successfully!', 'success');
         
         // Add welcome message to chat
         this.addChatMessage('ai', 'Perfect! I\'m now connected and ready to help. Click the "Scan" button above to analyze the current webpage, then ask me anything about it!');
+        
+        // Save session after authentication
+        await this.saveSession();
       } else {
-        this.showError(response.error || 'Authentication failed');
+        this.showError(response?.error || 'Authentication failed. Please check your API key.');
       }
     } catch (error) {
       console.error('Authentication error:', error);
-      this.showError('Connection failed. Please check your API key and try again.');
+      this.showError('Connection failed. Please check your API key and internet connection.');
     } finally {
       this.setButtonLoading(submitBtn, false);
     }
@@ -253,6 +396,9 @@ class PopupController {
         this.addChatMessage('ai', scanSummary);
         
         this.updateStatus('Scan complete', 'success');
+        
+        // Save session after successful scan
+        await this.saveSession();
       } else {
         throw new Error(response?.error || 'Scan failed - no response from content script');
       }
@@ -321,33 +467,80 @@ class PopupController {
     this.addChatMessage('user', message);
     
     // Show typing indicator
-    const typingId = this.addChatMessage('ai', '💭 Thinking...');
+    const typingId = this.addChatMessage('ai', '💭 Thinking...', false);
     
     try {
-      // Send to AI service
-      const response = await chrome.runtime.sendMessage({
-        action: 'chatWithAI',
-        message: message,
-        pageData: this.pageData,
-        chatHistory: this.chatHistory.slice(-10) // Last 10 messages for context
-      });
+      // Check if we have page data
+      if (!this.pageData) {
+        throw new Error('Please scan the page first before asking questions.');
+      }
+
+      // Check authentication
+      if (!this.isAuthenticated) {
+        throw new Error('Please connect your API key first.');
+      }
+
+      // Send to AI service with better error handling
+      const response = await Promise.race([
+        chrome.runtime.sendMessage({
+          action: 'chatWithAI',
+          message: message,
+          pageData: this.pageData,
+          chatHistory: this.chatHistory.slice(-10), // Last 10 messages for context
+          timestamp: Date.now()
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Chat request timeout')), 30000)
+        )
+      ]);
       
       // Remove typing indicator
       this.removeChatMessage(typingId);
       
-      if (response.success) {
+      if (response && response.success) {
         this.addChatMessage('ai', response.reply);
+      } else if (response && response.error) {
+        console.error('Chat API error:', response.error);
+        let errorMessage = response.error;
+        
+        // Make error messages more user-friendly
+        if (errorMessage.includes('Unknown action')) {
+          errorMessage = 'There was a problem connecting to the AI service. Please try refreshing the extension.';
+        } else if (errorMessage.includes('API key')) {
+          errorMessage = 'Please check your OpenAI API key in settings.';
+        } else if (errorMessage.includes('quota') || errorMessage.includes('billing')) {
+          errorMessage = 'API quota exceeded. Please check your OpenAI billing limits.';
+        }
+        
+        this.addChatMessage('ai', `I apologize, but I encountered an issue: ${errorMessage}`);
       } else {
-        this.addChatMessage('ai', 'Sorry, I encountered an error. Please try again or check your connection.');
+        console.error('Chat failed with no response');
+        this.addChatMessage('ai', 'I apologize, but I didn\'t receive a response. Please try refreshing the extension.');
       }
     } catch (error) {
       console.error('Chat error:', error);
       this.removeChatMessage(typingId);
-      this.addChatMessage('ai', 'Sorry, I had trouble processing your request. Please check your connection and try again.');
+      
+      let errorMessage = 'I apologize, but there was an issue processing your request.\n\n';
+      
+      if (error.message.includes('scan the page first')) {
+        errorMessage += '**Please scan the page first** before asking questions. Click the "Scan" button above to analyze the current webpage.';
+      } else if (error.message.includes('API key')) {
+        errorMessage += '**Please connect your API key** first. You can do this in the settings.';
+      } else if (error.message.includes('timeout')) {
+        errorMessage += '**The request timed out.** Please check your internet connection and try again.';
+      } else {
+        errorMessage += '**Troubleshooting steps:**\n• Refresh the extension\n• Check your internet connection\n• Try scanning the page again';
+      }
+      
+      this.addChatMessage('ai', errorMessage);
     }
+    
+    // Save session after chat
+    await this.saveSession();
   }
 
-  addChatMessage(sender, content) {
+  addChatMessage(sender, content, saveToHistory = true) {
     const chatMessages = document.getElementById('chatMessages');
     const messageId = Date.now() + Math.random();
     
@@ -368,12 +561,17 @@ class PopupController {
     chatMessages.scrollTop = chatMessages.scrollHeight;
     
     // Store in chat history (exclude system messages like typing indicators)
-    if (!content.includes('💭 Thinking...')) {
+    if (saveToHistory && !content.includes('💭 Thinking...')) {
       this.chatHistory.push({
         sender: sender,
         content: content,
         timestamp: Date.now()
       });
+      
+      // Limit chat history to prevent memory issues
+      if (this.chatHistory.length > 50) {
+        this.chatHistory = this.chatHistory.slice(-30);
+      }
     }
     
     return messageId;
@@ -408,7 +606,7 @@ class PopupController {
         tabId: this.currentTab.id
       });
 
-      if (response.success && response.session) {
+      if (response && response.success && response.session) {
         const session = response.session;
         
         if (session.scanData) {

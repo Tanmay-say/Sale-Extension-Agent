@@ -1,4 +1,4 @@
-// Background service worker for AI Sales Agent Extension
+// Background service worker for AI Chatbot Extension
 
 class SessionManager {
   constructor() {
@@ -56,53 +56,73 @@ class SessionManager {
 
   async handleMessage(message, sender, sendResponse) {
     try {
+      console.log('Background received message:', message.action);
+
+      // Validate message format
+      if (!message || !message.action) {
+        console.error('Invalid message format:', message);
+        return sendResponse({ success: false, error: 'Invalid message format' });
+      }
+
       switch (message.action) {
         case 'pageScanned':
           await this.handlePageScanned(message, sender);
           sendResponse({ success: true });
           break;
 
-        case 'getRecommendations':
-          const recommendations = await this.getRecommendations(message.data);
-          sendResponse({ success: true, recommendations });
-          break;
-
         case 'chatWithAI':
+          if (!message.message || !message.pageData) {
+            console.error('Invalid chat request:', message);
+            sendResponse({ success: false, error: 'Invalid chat request format' });
+            return;
+          }
           const chatResponse = await this.handleChatWithAI(message);
           sendResponse(chatResponse);
           break;
 
         case 'authenticateUser':
+          if (!message.credentials) {
+            console.error('Invalid auth request:', message);
+            sendResponse({ success: false, error: 'Invalid authentication request' });
+            return;
+          }
           const authResult = await this.authenticateUser(message.credentials);
           sendResponse(authResult);
           break;
 
         case 'getSession':
+          if (!message.tabId) {
+            console.error('Invalid session request:', message);
+            sendResponse({ success: false, error: 'Invalid session request' });
+            return;
+          }
           const session = await this.getSession(message.tabId);
           sendResponse({ success: true, session });
           break;
 
         case 'updateSession':
+          if (!message.tabId || !message.data) {
+            console.error('Invalid session update:', message);
+            sendResponse({ success: false, error: 'Invalid session update request' });
+            return;
+          }
           await this.updateSession(message.tabId, message.data);
           sendResponse({ success: true });
           break;
 
-        case 'getSimilarProducts':
-          const similarProducts = await this.getSimilarProducts(message.product);
-          sendResponse({ success: true, products: similarProducts });
-          break;
-
-        case 'getProductReviews':
-          const reviews = await this.getProductReviews(message.product);
-          sendResponse({ success: true, reviews });
-          break;
-
         default:
-          sendResponse({ success: false, error: 'Unknown action' });
+          console.warn('Unknown action:', message.action);
+          sendResponse({ 
+            success: false, 
+            error: `Unknown action: ${message.action}. Please refresh the extension.` 
+          });
       }
     } catch (error) {
       console.error('Background script error:', error);
-      sendResponse({ success: false, error: error.message });
+      sendResponse({ 
+        success: false, 
+        error: error.message || 'An unexpected error occurred' 
+      });
     }
   }
 
@@ -126,23 +146,55 @@ class SessionManager {
 
   async handleChatWithAI(message) {
     try {
+      console.log('Processing chat request...');
+      
       const credentials = await this.getUserCredentials();
-      if (!credentials) {
-        return { success: false, error: 'User not authenticated' };
+      if (!credentials || !credentials.apiKey) {
+        return { success: false, error: 'User not authenticated. Please connect your API key first.' };
       }
 
       const { message: userMessage, pageData, chatHistory } = message;
       
+      if (!userMessage || userMessage.trim().length === 0) {
+        return { success: false, error: 'Please enter a message to send.' };
+      }
+
+      if (!pageData) {
+        return { success: false, error: 'No page data available. Please scan the page first.' };
+      }
+
       // Set credentials for AI service
       await this.aiService.setCredentials(credentials);
       
       // Generate contextual response
+      console.log('Generating AI response...');
       const reply = await this.aiService.generateChatResponse(userMessage, pageData, chatHistory);
       
+      if (!reply) {
+        throw new Error('No response received from AI service');
+      }
+
+      console.log('AI response generated successfully');
       return { success: true, reply };
     } catch (error) {
       console.error('Chat AI error:', error);
-      return { success: false, error: error.message };
+      
+      // Provide more specific error messages
+      let errorMessage = 'An error occurred while processing your request.';
+      
+      if (error.message.includes('API key')) {
+        errorMessage = 'Invalid API key. Please check your OpenAI API key in settings.';
+      } else if (error.message.includes('quota') || error.message.includes('billing')) {
+        errorMessage = 'API quota exceeded. Please check your OpenAI billing and usage limits.';
+      } else if (error.message.includes('network') || error.message.includes('fetch')) {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (error.message.includes('timeout')) {
+        errorMessage = 'Request timed out. Please try again with a shorter message.';
+      } else if (error.message.includes('rate limit')) {
+        errorMessage = 'Rate limit exceeded. Please wait a moment and try again.';
+      }
+      
+      return { success: false, error: errorMessage };
     }
   }
 
@@ -199,6 +251,8 @@ class SessionManager {
 
   async authenticateUser(credentials) {
     try {
+      console.log('Authenticating user...');
+      
       // Validate credentials with AI service
       const isValid = await this.aiService.validateCredentials(credentials);
       
@@ -209,12 +263,23 @@ class SessionManager {
           lastAuth: Date.now()
         });
 
+        console.log('Authentication successful');
         return { success: true, message: 'Authentication successful' };
       } else {
-        return { success: false, error: 'Invalid credentials' };
+        console.log('Authentication failed - invalid credentials');
+        return { success: false, error: 'Invalid API key. Please check your OpenAI API key and try again.' };
       }
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('Authentication error:', error);
+      
+      let errorMessage = 'Authentication failed.';
+      if (error.message.includes('network') || error.message.includes('fetch')) {
+        errorMessage = 'Network error during authentication. Please check your internet connection.';
+      } else if (error.message.includes('quota') || error.message.includes('billing')) {
+        errorMessage = 'API key is valid but has no available credits. Please check your OpenAI billing.';
+      }
+      
+      return { success: false, error: errorMessage };
     }
   }
 
@@ -347,15 +412,26 @@ class AIService {
     this.apiKey = credentials.apiKey;
     
     try {
+      console.log('Validating API credentials...');
+      
       // Test API key with a simple request
       const response = await fetch(`${this.baseUrl}/models`, {
+        method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json'
         }
       });
 
-      return response.ok;
+      const responseText = await response.text();
+      
+      if (response.ok) {
+        console.log('API credentials validated successfully');
+        return true;
+      } else {
+        console.error('API validation failed:', response.status, responseText);
+        return false;
+      }
     } catch (error) {
       console.error('Credential validation failed:', error);
       return false;
@@ -383,6 +459,8 @@ class AIService {
     messages.push({ role: 'user', content: userMessage });
     
     try {
+      console.log('Making OpenAI API request...');
+      
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
@@ -398,12 +476,32 @@ class AIService {
         })
       });
 
+      const responseText = await response.text();
+      
       if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`);
+        console.error('OpenAI API error:', response.status, responseText);
+        
+        if (response.status === 401) {
+          throw new Error('Invalid API key. Please check your OpenAI API key.');
+        } else if (response.status === 429) {
+          throw new Error('Rate limit exceeded. Please wait a moment and try again.');
+        } else if (response.status === 402) {
+          throw new Error('Quota exceeded. Please check your OpenAI billing and usage limits.');
+        } else {
+          throw new Error(`API request failed with status ${response.status}: ${responseText}`);
+        }
       }
 
-      const data = await response.json();
-      return data.choices[0].message.content;
+      const data = JSON.parse(responseText);
+      
+      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+        throw new Error('Invalid response format from OpenAI API');
+      }
+      
+      const reply = data.choices[0].message.content;
+      console.log('OpenAI response received successfully');
+      
+      return reply;
     } catch (error) {
       console.error('Chat AI failed:', error);
       throw error;
@@ -411,15 +509,15 @@ class AIService {
   }
 
   createChatSystemPrompt(pageData) {
-    let prompt = `You are an AI shopping assistant helping users with product research and shopping decisions. You have access to information from the current web page they're viewing.
+    let prompt = `You are an AI assistant helping users understand and analyze web pages. You have access to information from the current web page they're viewing.
 
 Current page information:
-- URL: ${pageData.url}
-- Domain: ${pageData.domain}
-- Page Type: ${pageData.pageType}
-- Title: ${pageData.title}`;
+- URL: ${pageData?.url || 'Unknown'}
+- Domain: ${pageData?.domain || 'Unknown'}
+- Page Type: ${pageData?.pageType || 'Unknown'}
+- Title: ${pageData?.title || 'Unknown'}`;
 
-    if (pageData.products && pageData.products.length > 0) {
+    if (pageData?.products && pageData.products.length > 0) {
       prompt += `\n\nProducts found (${pageData.products.length}):`;
       pageData.products.slice(0, 3).forEach((product, i) => {
         prompt += `\n${i + 1}. ${product.name}`;
@@ -429,36 +527,36 @@ Current page information:
       });
     }
 
-    if (pageData.prices && pageData.prices.length > 0) {
+    if (pageData?.prices && pageData.prices.length > 0) {
       prompt += `\n\nPrices detected: ${pageData.prices.slice(0, 5).join(', ')}`;
     }
 
-    if (pageData.reviews && pageData.reviews.length > 0) {
+    if (pageData?.reviews && pageData.reviews.length > 0) {
       prompt += `\n\nReviews found: ${pageData.reviews.length} reviews available`;
       if (pageData.reviews[0]) {
         prompt += `\nSample review: "${pageData.reviews[0].text.substring(0, 150)}..."`;
       }
     }
 
-    if (pageData.specifications && pageData.specifications.length > 0) {
+    if (pageData?.specifications && pageData.specifications.length > 0) {
       prompt += `\n\nSpecifications (${pageData.specifications.length}):`;
       pageData.specifications.slice(0, 5).forEach(spec => {
         prompt += `\n- ${spec.name}: ${spec.value}`;
       });
     }
 
-    if (pageData.availability) {
+    if (pageData?.availability) {
       prompt += `\n\nAvailability: ${pageData.availability.inStock ? 'In Stock' : 'Out of Stock'}`;
       if (pageData.availability.deliveryInfo) {
         prompt += `\nDelivery: ${pageData.availability.deliveryInfo}`;
       }
     }
 
-    if (pageData.categories && pageData.categories.length > 0) {
+    if (pageData?.categories && pageData.categories.length > 0) {
       prompt += `\n\nCategories: ${pageData.categories.slice(0, 3).join(', ')}`;
     }
 
-    prompt += `\n\nPlease help the user with their questions about this page/product. Be helpful, friendly, and provide specific insights based on the available data. If they ask about comparisons, prices, features, or recommendations, use the information provided. Keep responses concise but informative.`;
+    prompt += `\n\nPlease help the user with their questions about this page/content. Be helpful, friendly, and provide specific insights based on the available data. If they ask about comparisons, prices, features, or recommendations, use the information provided. Keep responses concise but informative.`;
 
     return prompt;
   }
@@ -482,7 +580,7 @@ Current page information:
           messages: [
             {
               role: 'system',
-              content: 'You are an AI sales agent analyzing web pages to provide helpful recommendations, reviews, and product suggestions. Be concise and actionable.'
+              content: 'You are an AI assistant analyzing web pages to provide helpful recommendations and insights. Be concise and actionable.'
             },
             {
               role: 'user',
@@ -507,14 +605,14 @@ Current page information:
   }
 
   createAnalysisPrompt(pageData) {
-    return `Analyze this webpage data and provide sales insights:
+    return `Analyze this webpage data and provide insights:
 
-URL: ${pageData.url}
-Title: ${pageData.title}
-Description: ${pageData.description}
-Products: ${JSON.stringify(pageData.products)}
-Prices: ${pageData.prices.join(', ')}
-Categories: ${pageData.categories.join(', ')}
+URL: ${pageData?.url}
+Title: ${pageData?.title}
+Description: ${pageData?.description}
+Products: ${JSON.stringify(pageData?.products || [])}
+Prices: ${pageData?.prices?.join(', ') || 'None'}
+Categories: ${pageData?.categories?.join(', ') || 'None'}
 
 Provide:
 1. Product insights and recommendations
